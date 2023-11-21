@@ -1,4 +1,25 @@
-from datetime import datetime, timedelta
+"""
+Created on Mon Nov  20 11:13:52 2023
+
+@author: Jack Bullen
+
+This file contains some useful functions to deal with 
+http://dap.onc.uvic.ca/erddap/tabledap/index.html
+
+Overview:
+
+get_available_datasets()
+get_dataset(dataset)
+
+---
+
+get_dates(soup)
+get_prime_numbers(N)
+prime_factorization(number)
+
+"""
+
+from datetime import datetime
 from bs4 import BeautifulSoup
 from io import StringIO
 from tqdm import tqdm
@@ -56,6 +77,34 @@ def get_available_datasets():
             'profiles': profiles
             }
 
+def get_dataset(dataset, start=-1, end=-1):
+    '''
+        Return DataFrame containing data at url, and units
+    '''
+    dataset_url = dataset['url']
+    parameters = dataset['parameters']
+
+    if start==-1:
+        start = dataset['start_date']
+    if end==-1:
+        end = dataset['end_date']
+
+    start_date = datetime.fromisoformat(start)
+    end_date = datetime.fromisoformat(end)
+
+    request_url = build_url('.'.join(dataset_url.split('.')[:-1]) + '.csv', start_date, end_date, parameters)
+    req = requests.get(request_url)
+
+    decoded_string = req.content.decode('utf-8')
+    rows = decoded_string.split('\n')
+    headers = rows[0]
+    units = rows[1]
+    data = rows[2:]
+
+    string_io_obj = StringIO('\n'.join([headers] + data))
+    df = pd.read_csv(string_io_obj)
+    return df, units
+
 def get_dates(soup):
     '''
         Return the date range for a http://dap.onc.uvic.ca/erddap/tabledap URL
@@ -90,31 +139,3 @@ def build_url(base, start_date, end_date, parameters):
     parameters_str = "%2C".join(parameters)
     time_range_str = f"time%3E={start_date.isoformat()}Z&time%3C={end_date.isoformat()}Z"
     return f"{base}?{parameters_str}&{time_range_str}"
-
-def get_dataset(dataset, start=-1, end=-1):
-    '''
-        Return DataFrame containing data at url, and units
-    '''
-    dataset_url = dataset['url']
-    parameters = dataset['parameters']
-
-    if start==-1:
-        start = dataset['start_date']
-    if end==-1:
-        end = dataset['end_date']
-
-    start_date = datetime.fromisoformat(start)
-    end_date = datetime.fromisoformat(end)
-
-    request_url = build_url('.'.join(dataset_url.split('.')[:-1]) + '.csv', start_date, end_date, parameters)
-    req = requests.get(request_url)
-
-    decoded_string = req.content.decode('utf-8')
-    rows = decoded_string.split('\n')
-    headers = rows[0]
-    units = rows[1]
-    data = rows[2:]
-
-    string_io_obj = StringIO('\n'.join([headers] + data))
-    df = pd.read_csv(string_io_obj)
-    return df, units
